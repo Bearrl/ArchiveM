@@ -1,14 +1,15 @@
 <!DOCTYPE html>
 <html lang="en">
   <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Hate Me - Ellie Goulding dan Juice WRLD</title>
     <link
       rel="stylesheet"
       href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;600&display=swap"
     />
     <style>
+      /* ...existing code... */
       body {
         display: flex;
         justify-content: center;
@@ -18,50 +19,65 @@
         font-family: "Poppins", sans-serif;
         position: relative;
         color: white;
+        background: #000;
       }
-
       body::before {
         content: "";
         position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
+        inset: 0;
         background-image: url("KIM JUNSEO.jpeg");
         background-size: cover;
         background-position: center;
         z-index: -2;
+        opacity: 0.6;
       }
-
-      body::after {
-        content: "";
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background-color: rgba(0, 0, 0, 0.1);
-        z-index: -1;
+      audio#musicPlayer {
+        display: none;
       }
-
       .lyrics-container {
         text-align: center;
-        white-space: pre;
         padding: 20px;
-        font-size: 24px;
-        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.8);
+        font-size: 28px;
+        text-shadow: 2px 2px 6px rgba(0, 0, 0, 0.8);
         z-index: 1;
+        min-width: 60%;
       }
-
       .line {
         display: block;
-        margin-bottom: 5px;
+        opacity: 0.6;
+        transition: opacity 0.15s, transform 0.15s;
+        margin: 8px 0;
       }
+      .line.current {
+        opacity: 1;
+        transform: scale(1.02);
+        font-weight: 600;
+      }
+      #startOverlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(0, 0, 0, 0.6);
+        color: #fff;
+        font-size: 20px;
+        z-index: 999;
+        cursor: pointer;
+      }
+      /* ...existing code... */
     </style>
   </head>
   <body>
+    <audio id="musicPlayer" autoplay playsinline preload="auto">
+      <source src="Hate Me.mp3" type="audio/mpeg" />
+    </audio>
+
     <div class="lyrics-container" id="lyricsContainer"></div>
+    <div id="startOverlay" style="display: none">Tap To Start</div>
+
     <script>
+      // ...existing code...
       const lyrics = [
         "Lies, tell me lies, baby, tell me how you hate me",
         "Hate me, hate me, still tryna replace me",
@@ -70,37 +86,104 @@
         "Lies, tell me lies, baby, tell me how you hate me",
       ];
 
-      const delays = [0.5, 0.1, 0.6, 0.6, 0.6];
-      const speeds = [0.1, 0.13, 0.13, 0.11, 0.12];
+      // start times (detik) — sesuaikan dengan file audio Anda
+      const starts = [0.5, 3.0, 5.0, 8.0, 12.0];
 
-      function animateText(text, container, speed) {
+      const MIN_SPEED = 0.01;
+      const MAX_SPEED = 0.12;
+
+      const targetDurations = [2.0, 2.5, 2.6, 2.5, 2.3];
+      const pauseBetweenLines = 0.4;
+
+      const audio = document.getElementById("musicPlayer");
+      const container = document.getElementById("lyricsContainer");
+      const overlay = document.getElementById("startOverlay");
+
+      let currentIndex = -1;
+      let isAnimating = false;
+
+      function animateText(text, el, speedSecPerChar) {
         return new Promise((resolve) => {
+          el.innerHTML = "";
           let i = 0;
-          function typeChar() {
+          const delay = Math.max(1, Math.round(speedSecPerChar * 1000));
+          function step() {
             if (i < text.length) {
-              container.innerHTML += text.charAt(i);
+              el.innerHTML += text.charAt(i);
               i++;
-              setTimeout(typeChar, speed * 1000);
+              setTimeout(step, delay);
             } else {
               resolve();
             }
           }
-          typeChar();
+          step();
         });
       }
 
-      async function singSong() {
-        const lyricsContainer = document.getElementById("lyricsContainer");
-        for (let i = 0; i < lyrics.length; i++) {
-          await new Promise((resolve) => setTimeout(resolve, delays[i] * 1000));
-          const lineContainer = document.createElement("span");
-          lineContainer.classList.add("line");
-          lyricsContainer.appendChild(lineContainer);
-          await animateText(lyrics[i], lineContainer, speeds[i]);
-        }
+      function computeSpeed(idx) {
+        const start = starts[idx];
+        const nextStart =
+          starts[idx + 1] !== undefined
+            ? starts[idx + 1]
+            : audio.duration
+            ? audio.duration
+            : start + 3;
+        let allocated = Math.max(0.4, nextStart - start - 0.05);
+        const len = Math.max(1, lyrics[idx].length);
+        let speed = targetDurations[idx] / len;
+        speed = Math.max(MIN_SPEED, Math.min(MAX_SPEED, speed));
+        return speed;
       }
 
-      singSong();
+      // mulai satu baris: append (tidak menghapus baris sebelumnya)
+      async function startLine(index) {
+        if (index < 0 || index >= lyrics.length) return;
+        isAnimating = true;
+
+        // tandai baris sebelumnya tidak current
+        const prev = container.querySelector(".line.current");
+        if (prev) prev.classList.remove("current");
+
+        const span = document.createElement("span");
+        span.className = "line current";
+        container.appendChild(span);
+        container.scrollTop = container.scrollHeight;
+
+        const speed = computeSpeed(index);
+        await animateText(lyrics[index], span, speed);
+
+        // selesai mengetik, tetap tampil — hapus kelas current (opsional biarkan)
+        span.classList.remove("current");
+        await new Promise((r) =>
+          setTimeout(r, Math.round(pauseBetweenLines * 1000))
+        );
+        isAnimating = false;
+        // tidak otomatis memulai baris berikutnya — akan menunggu audio mencapai start berikutnya
+      }
+
+      audio.addEventListener("timeupdate", () => {
+        if (isAnimating) return;
+        const next = currentIndex + 1;
+        if (next >= lyrics.length) return;
+        if (audio.currentTime + 0.02 >= starts[next]) {
+          currentIndex = next;
+          startLine(next);
+        }
+      });
+
+      audio.addEventListener("play", () => {
+        if (audio.currentTime < 0.6) {
+          container.innerHTML = "";
+          currentIndex = -1;
+        }
+        overlay.style.display = "none";
+      });
+
+      window.addEventListener("DOMContentLoaded", () => {
+        audio.play().catch(() => (overlay.style.display = "flex"));
+      });
+      overlay.addEventListener("click", () => audio.play().catch(() => {}));
+      // ...existing code...
     </script>
   </body>
 </html>
